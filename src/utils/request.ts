@@ -35,11 +35,24 @@ service.interceptors.response.use(
       return response;
     }
 
+    console.log("响应", response);
+
     const { code, data, msg } = response.data;
+
+    console.log(code);
+
     if (code === ResultEnum.SUCCESS) {
       return data;
     }
 
+    //接口https://api.7dgame.com/sites/login似乎跟之前的接口返回内容格式不一样
+    // 这里特殊处理
+    // 格式是：access_token和user
+    const { access_token, user } = response.data;
+    console.log(`accessToken:${access_token} and user:${user}`);
+    if (access_token && user) {
+      return response;
+    }
     ElMessage.error(msg || "系统出错");
     return Promise.reject(new Error(msg || "Error"));
   },

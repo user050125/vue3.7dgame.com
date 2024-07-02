@@ -20,11 +20,40 @@
 
       <el-form
         ref="loginFormRef"
+        class="login-body"
+        :rules="rules"
+        :model="form"
+        label-width="75px"
+      >
+        <el-form-item
+          label="用户名"
+          prop="username"
+          style="margin-bottom: 26px"
+        >
+          <el-input v-model="form.username" suffix-icon="el-icon-user" />
+        </el-form-item>
+        <el-form-item label="密码" prop="password" style="margin-bottom: 26px">
+          <el-input
+            v-model="form.password"
+            type="password"
+            suffix-icon="el-icon-lock"
+            @keyup.enter="submit()"
+          />
+        </el-form-item>
+
+        <el-form-item class="login-button">
+          <el-button style="width: 100%" type="primary" @click="submit()">
+            登陆平台
+          </el-button>
+        </el-form-item>
+      </el-form>
+      <!--原 <el-form
+        ref="loginFormRef"
         :model="loginData"
         :rules="loginRules"
         class="login-form"
       >
-        <!-- 用户名 -->
+        
         <el-form-item prop="username">
           <div class="flex-y-center w-full">
             <svg-icon icon-class="user" class="mx-2" />
@@ -39,7 +68,7 @@
           </div>
         </el-form-item>
 
-        <!-- 密码 -->
+        
         <el-tooltip
           :visible="isCapslock"
           :content="$t('login.capsLock')"
@@ -63,7 +92,6 @@
           </el-form-item>
         </el-tooltip>
 
-        <!-- 验证码 -->
         <el-form-item prop="captchaCode">
           <div class="flex-y-center w-full">
             <svg-icon icon-class="captcha" class="mx-2" />
@@ -84,7 +112,6 @@
           </div>
         </el-form-item>
 
-        <!-- 登录按钮 -->
         <el-button
           :loading="loading"
           type="primary"
@@ -94,12 +121,11 @@
           >{{ $t("login.login") }}
         </el-button>
 
-        <!-- 账号密码提示 -->
         <div class="mt-10 text-sm">
           <span>{{ $t("login.username") }}: admin</span>
           <span class="ml-4"> {{ $t("login.password") }}: 123456</span>
         </div>
-      </el-form>
+      </el-form> -->
     </el-card>
 
     <!-- ICP备案 -->
@@ -114,15 +140,16 @@
 </template>
 
 <script setup lang="ts">
-import { useSettingsStore, useUserStore } from "@/store";
+import { usePermissionStore, useSettingsStore, useUserStore } from "@/store";
 import AuthAPI from "@/api/auth";
 import { LoginData } from "@/api/auth/model";
-import type { FormInstance } from "element-plus";
-import { LocationQuery, useRoute } from "vue-router";
+import { FormInstance } from "element-plus";
+import { LocationQuery, useRoute, RouteRecordRaw } from "vue-router";
 import router from "@/router";
 import defaultSettings from "@/settings";
 import { ThemeEnum } from "@/enums/ThemeEnum";
-
+import { login } from "@/api/sites";
+import { TOKEN_KEY } from "@/enums/CacheEnum";
 const userStore = useUserStore();
 const settingsStore = useSettingsStore();
 const route = useRoute();
@@ -139,41 +166,124 @@ const captchaBase64 = ref(); // 验证码图片Base64字符串
 const loginFormRef = ref<FormInstance>(); // 登录表单ref
 const { height } = useWindowSize();
 
+const form = ref<LoginData>({
+  username: "admin",
+  password: "123456",
+});
+// submit(formName) {
+//       const self = this
+//       this.$refs[formName].validate(valid => {
+//         if (valid) {
+//           login({
+//             username: self.form.username,
+//             password: self.form.password
+//           })
+//             .then(response => {
+//               console.log(response)
+//               if (response.data) {
+//                 setToken(response.data.access_token)
+//                 this.$store.commit('user/setUser', response.data.user)
+//                 UpdateAbility(self.$ability, response.data.user.roles)
+//                 this.$router.push('/')
+//               }
+//             })
+//             .catch(e => {})
+//         } else {
+//           return false
+//         }
+//       })
+//     }
+
+function submit() {
+  loginFormRef.value?.validate((valid) => {
+    if (valid) {
+      loading.value = true;
+      login({
+        username: form.value.username,
+        password: form.value.password,
+      })
+        .then((response) => {
+          //console.log("aaaaaaaaaaaaaaaa",response)
+          if (response.data.access_token && response.data.user) {
+            //拿到响应数据后，将token存入本地
+            localStorage.setItem(TOKEN_KEY, response.data.access_token);
+            //存入用户的数据
+
+            userStore.user = response.data.user;
+            //console.log("bvvvvvvvvvvvvvv",userStore.user);
+            console.log(`userStore.user:${response.data.user}`);
+
+            (async () => {
+              const permissionStore = usePermissionStore();
+
+              const { roles } = await userStore.getUserInfo();
+              const accessRoutes = await permissionStore.generateRoutes(roles);
+              accessRoutes.forEach((route: RouteRecordRaw) => {
+                router.addRoute(route);
+              });
+              //跳转到仪表盘
+
+              router.push({
+                path: "/dashboard",
+              });
+            })();
+            // setToken(response.data.access_token)
+            // this.$store.commit('user/setUser', response.data.user)
+          }
+        })
+        .catch((e) => {})
+        .finally(() => (loading.value = false));
+    } else {
+    }
+  });
+}
+const rules = computed(() => {
+  return {
+    username: [
+      { required: true, message: "请输入用户名称", trigger: "blur" },
+      { min: 5, message: "用户名称长度应该大于5", trigger: "blur" },
+    ],
+    password: [
+      { required: true, message: "请输入密码", trigger: "blur" },
+      { min: 6, message: "密码长度应该大于6", trigger: "blur" },
+    ],
+  };
+});
 const loginData = ref<LoginData>({
   username: "admin",
   password: "123456",
 });
 
-const loginRules = computed(() => {
-  return {
-    username: [
-      {
-        required: true,
-        trigger: "blur",
-        message: t("login.message.username.required"),
-      },
-    ],
-    password: [
-      {
-        required: true,
-        trigger: "blur",
-        message: t("login.message.password.required"),
-      },
-      {
-        min: 6,
-        message: t("login.message.password.min"),
-        trigger: "blur",
-      },
-    ],
-    captchaCode: [
-      {
-        required: true,
-        trigger: "blur",
-        message: t("login.message.captchaCode.required"),
-      },
-    ],
-  };
-});
+// const loginRules = computed(() => {
+//   return {
+//     username: [
+//       {
+//         required: true,
+//         trigger: "blur",
+//         message: t("login.message.username.required"),
+//       },
+//     ],
+//     password: [
+//       {
+//         required: true,
+//         trigger: "blur",
+//         message: t("login.message.password.required"),
+//       },
+//       {
+//         min: 6,
+//         message: t("login.message.password.min"),
+//         trigger: "blur",
+//       },
+//     ],
+//     captchaCode: [
+//       {
+//         required: true,
+//         trigger: "blur",
+//         message: t("login.message.captchaCode.required"),
+//       },
+//     ],
+//   };
+// });
 
 /** 获取验证码 */
 function getCaptcha() {

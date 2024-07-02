@@ -20,6 +20,7 @@ export function setupPermission() {
         const userStore = useUserStore();
         const hasRoles =
           userStore.user.roles && userStore.user.roles.length > 0;
+
         if (hasRoles) {
           // 未匹配到任何路由，跳转404
           if (to.matched.length === 0) {
